@@ -1,74 +1,84 @@
-import os
-from socket import *
-from _thread import *
+import socket
+import pickle
 
-def start_server():
-    serverPort = 12000
-    serverSocket = socket(AF_INET, SOCK_STREAM)
-    serverSocket.bind(("localhost",serverPort))
-    serverSocket.listen()
-    print("The server is ready to receive")
+# import the game
+from tictactoe import TicTacToe
 
-    player1, addr1 = serverSocket.accept()
-    print(f"Player 1 connected from {addr1}")
-    player2, addr2 = serverSocket.accept()
-    print(f"Player 2 connected from {addr2}")
+HOST = '127.0.0.1'
+PORT = 12000
 
-    play_game(player1, player2)
+server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+server_socket.bind((HOST, PORT))
+server_socket.listen(5) 
+client_socket, client_address = server_socket.accept()
+print(f"\nConnnected to {client_address}!")
 
+# set up the game
+player_A = TicTacToe("A")
 
-def play_game(player1, player2):
-    current_player = player1
+# allow the player to suggest playing again
+rematch = True
 
-    # Initialize the game board
-    board = [[" "] * 3 for _ in range(3)]
+while rematch == True: 
+    print(f"\n\n T I C - T A C - T O E ")
 
-    while True:
-        # Send the current board to the current player
-        send_board(current_player, board)
+    while player_A.check_win("A") == False and player_A.check_win("B") == False and player_A.is_draw() == False:
+        print(f"\nYour turn!")
+        player_A.display_board()
+        move = input(f"Enter your move (0-8): ")
+        player_A.edit_board(move)
 
-        # Receive the player's move
-        move = current_player.recv(1024).decode()
+        # draw the grid again
+        player_A.display_board()
 
-        # Update the board with the player's move
-        row, col = divmod(int(move), 3)
-        if board[row][col] == " ":
-            board[row][col] = "X" if current_player == player1 else "O"
+        A_board = pickle.dumps(player_A.board)
+        client_socket.send(A_board)
 
-        # Check for a win or a tie
-        if check_win(board):
-            current_player.send("Congratulations! You win!".encode())
-            break
-        elif all(all(cell != " " for cell in row) for row in board):
-            player1.send("It's a tie! The game is over.".encode())
-            player2.send("It's a tie! The game is over.".encode())
+        # if the player won with the last move or it's a draw, exit the loop 
+        if player_A.check_win("A") == True or player_A.is_draw() == True:
             break
 
-        # Switch to the other player
-        current_player = player2 if current_player == player1 else player1
+        # wait to receive the symbol list and update it
+        print(f"\nWaiting for other player...")
+        B_board = client_socket.recv(1024)
+        B_board = pickle.loads(B_board)
+        player_A.update_board(B_board)
 
-    # Close the connections
-    player1.close()
-    player2.close()
+    # end game messages
+    if player_A.check_win("A") == True:
+        print(f"Congrats, you won!")
+    elif player_A.is_draw() == True:
+        print(f"It's a draw!")
+    else:
+        print(f"The B won.")
 
-# Function to send the current board to a player
-def send_board(player, board):
-    board_str = "\n".join(" ".join(row) for row in board)
-    player.send(board_str.encode())
+    # ask for a rematch 
+    host_response = input(f"\nRematch? (Y/N): ")
+    host_response = host_response.capitalize()
+    temp_host_resp = host_response
+    client_response = ""
 
-# Function to check for a win
-def check_win(board):
-    # Check rows, columns, and diagonals for a win
-    # for i in range(3):
-    #     if board[i][0] == board[i][1] == board[i][2] != " ":
-    #         return True
-    #     if board[0][i] == board[1][i] == board[2][i] != " ":
-    #         return True
+    client_socket.send(host_response.encode())
 
-    # if board[0][0] == board[1][1] == board[2][2] != " " or board[0][2] == board[1][1] == board[2][0] != " ":
-    #     return True
+    # if the host doesn't want a rematch, done
+    if temp_host_resp == "N":
+        rematch = False
 
-    return False
+    # if the host does want a rematch, ask the client for their opinion
+    else:
+        # receive client's response 
+        print(f"Waiting for client response...")
+        client_response = client_socket.recv(1024).decode()
 
-if __name__ == "__main__":
-    start_server()
+        # if the client doesn't want a rematch, exit the loop 
+        if client_response == "N":
+            print(f"\nThe client does not want a rematch.")
+            rematch = False
+
+        # if both the host and client want a rematch, restart the game
+        else:
+            player_A.restart()
+
+spacer = input(f"\nThank you for playing!\nPress enter to quit...\n")
+
+client_socket.close()
