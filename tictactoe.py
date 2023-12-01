@@ -12,10 +12,6 @@ class TicTacToe():
         self.player_symbol = player_symbol
 
 
-    def restart(self):
-        self.board = [["0"] * 3 for _ in range(3)]
-
-
     def display_board(self):
         board_str = "\n".join(" ".join(row) for row in self.board)
         print(board_str)
@@ -25,10 +21,18 @@ class TicTacToe():
         row, col = divmod(int(position), 3)
         if self.board[row][col] == "0":
             self.board[row][col] = self.player_symbol
+            return True
+        else:
+            print("Invalid move.")
+            return False
 
 
     def update_board(self, new_board):
         self.board = new_board
+
+
+    def restart(self):
+        self.board = [["0"] * 3 for _ in range(3)]
 
 
     def check_win(self, player_symbol):
@@ -46,14 +50,12 @@ class TicTacToe():
 
 
     def is_draw(self):
-        # see if all the spaces are used up 
         num_blanks = 0
         for i in range(3):
             for j in range(3):
                 if self.board[i][j] == "0":
                     num_blanks = 1
 
-        # if the player didn't win and no spaces are left, it's a draw
         if self.check_win(self.player_symbol) == False and num_blanks == 0:
             return True
         else:
